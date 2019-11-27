@@ -8,6 +8,8 @@
 import os
 import pkgutil
 import importlib
+from typing import Optional
+
 import config
 import baseObject
 import winVersion
@@ -311,12 +313,14 @@ class SynthDriver(driverHandler.Driver):
 		return None
 
 
-_curSynth=None
+_curSynth: Optional[SynthDriver] = None
 _audioOutputDevice=None
+
 
 def initialize():
 	config.addConfigDirsToPythonPackagePath(synthDrivers)
 	config.post_configProfileSwitch.register(handlePostConfigProfileSwitch)
+
 
 def changeVoice(synth, voice):
 	# This function can be called with no voice if the synth doesn't support the voice setting (only has one voice).
@@ -328,8 +332,10 @@ def changeVoice(synth, voice):
 	else:  globalVars.settingsRing = SynthSettingsRing(synth)
 	speechDictHandler.loadVoiceDict(synth)
 
+
 def _getSynthDriver(name):
 	return importlib.import_module("synthDrivers.%s" % name, package="synthDrivers").SynthDriver
+
 
 def getSynthList():
 	synthList=[]
@@ -358,13 +364,16 @@ def getSynthList():
 		synthList.append(lastSynth)
 	return synthList
 
-def getSynth():
+
+def getSynth() -> Optional[SynthDriver]:
 	return _curSynth
+
 
 def getSynthInstance(name):
 	newSynth = _getSynthDriver(name)()
 	newSynth.initSettings()
 	return newSynth
+
 
 # The synthDrivers that should be used by default.
 # The first that successfully initializes will be used when config is set to auto (I.e. new installs of NVDA).
@@ -372,6 +381,7 @@ defaultSynthPriorityList=['espeak','silence']
 if winVersion.winVersion.major>=10:
 	# Default to OneCore on Windows 10 and above
 	defaultSynthPriorityList.insert(0,'oneCore')
+
 
 def setSynth(name,isFallback=False):
 	global _curSynth,_audioOutputDevice
@@ -412,11 +422,14 @@ def setSynth(name,isFallback=False):
 				setSynth(newName,isFallback=True)
 		return False
 
+
 def handlePostConfigProfileSwitch(resetSpeechIfNeeded=True):
 	"""
 	Switches synthesizers and or applies new voice settings to the synth due to a config profile switch.
-	@var resetSpeechIfNeeded: if true and a new synth will be loaded, speech queues are fully reset first. This is what happens by default. 
-	However, Speech itself may call this with false internally if this is a config profile switch within a currently processing speech sequence. 
+	@var resetSpeechIfNeeded: if true and a new synth will be loaded, speech queues are fully reset first.
+	This is what happens by default.
+	However, Speech itself may call this with false internally if this is a config profile switch within a
+	currently processing speech sequence.
 	@type resetSpeechIfNeeded: bool
 	"""
 	conf = config.conf["speech"]
