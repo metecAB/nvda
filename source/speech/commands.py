@@ -10,6 +10,7 @@ from abc import ABCMeta, abstractmethod
 from typing import Optional
 
 import config
+import extensionPoints
 from synthDriverHandler import getSynth
 
 class SpeechCommand(object):
@@ -17,6 +18,27 @@ class SpeechCommand(object):
 	Note that some of these commands are processed by NVDA and are not directly passed to synth drivers.
 	synth drivers will only receive commands derived from L{SynthCommand}.
 	"""
+
+
+class CancelableSpeechCommand(SpeechCommand):
+
+	def __init__(self):
+		self._isCancelled = False
+		self.speechCommandCanceledAction = extensionPoints.Action()
+
+	speechCommandCanceledAction: extensionPoints.Action
+
+	@property
+	def isCancelled(self):
+		return self._isCancelled or not self._checkIfValid()
+
+	def cancelUtterance(self):
+		self._isCancelled = True
+		self.speechCommandCanceledAction.notify(speechCommand=self)
+
+	def _checkIfValid(self) -> bool:
+		"""overridable behavior, to check some condition for validity"""
+		return True
 
 class SynthCommand(SpeechCommand):
 	"""Commands that can be passed to synth drivers.

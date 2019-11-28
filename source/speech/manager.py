@@ -3,10 +3,12 @@
 #This file is covered by the GNU General Public License.
 #See the file COPYING for more details.
 #Copyright (C) 2006-2019 NV Access Limited
+from typing import cast, Dict, Any, List, Callable
 
 from logHandler import log
 import queueHandler
 import synthDriverHandler
+from .types import SpeechSequence
 from .commands import *
 from .priorities import *
 
@@ -112,6 +114,7 @@ class SpeechManager(object):
 	Note:
 	All of this activity is (and must be) synchronized and serialized on the main thread.
 	"""
+	_cancelableSpeechCallbacks: Dict[CancelableSpeechCommand, Callable[[CancelableSpeechCommand, ], None]]
 
 	def __init__(self):
 		#: A counter for indexes sent to the synthesizer for callbacks, etc.
@@ -149,6 +152,7 @@ class SpeechManager(object):
 		self._indexesToCallbacks = {}
 		#: Whether to push more speech when the synth reports it is done speaking.
 		self._shouldPushWhenDoneSpeaking = False
+		self._cancelableSpeechCallbacks = {}
 
 	def speak(self, speechSequence, priority):
 		# If speech isn't already in progress, we need to push the first speech.
@@ -314,7 +318,45 @@ class SpeechManager(object):
 				# The utterance ends here.
 				break
 			utterance.extend(seq)
+		if not self._validateUtterance(utterance):
+			return None
 		return utterance
+
+	def _validateUtterance(self, utterance: SpeechSequence):
+		cancelableItems = [
+			item for item in utterance if isinstance(item, CancelableSpeechCommand)
+		]
+		for item in cancelableItems:
+			if item.isCancelled:
+				self._cancelUtterance(utterance)
+				return False
+			else:
+				def callback(cancelableSpeechCommand):
+					self._cancelUtteranceAfterSentToSynth(
+						utterance,
+						cancelableSpeechCommand
+					)
+				self._cancelableSpeechCallbacks[item] = callback
+				item.speechCommandCanceledAction.register(callback)
+		return True
+
+	def removeCancelledSpeechCommands(self):
+		for item, callback in self._cancelableSpeechCallbacks.items():
+			if item.isCancelled:
+				callback(item)
+
+	def _cancelUtteranceAfterSentToSynth(self, utterance, cancelableSpeech: CancelableSpeechCommand):
+		getSynth().cancel()
+		self._cancelUtterance(utterance)
+		self._cancelableSpeechCallbacks.pop(cancelableSpeech)
+
+	def _cancelUtterance(self, utterance):
+		#  find the index command, should be the last in sequence
+		indexItem: IndexCommand = utterance[-1]
+		if not isinstance(indexItem, IndexCommand):
+			log.error("Expected last item to be an indexCommand.")
+			return
+		self._handleIndex(indexItem.index)
 
 	def _onSynthIndexReached(self, synth=None, index=None):
 		if synth != getSynth():

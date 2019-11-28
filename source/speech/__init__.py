@@ -339,6 +339,21 @@ def speakObjectProperties(obj, reason=controlTypes.REASON_QUERY, priority=None, 
 			newPropertyValues['states']=states
 	#Get the speech text for the properties we want to speak, and then speak it
 	speechSequence = getPropertiesSpeech(reason=reason, **newPropertyValues)
+
+	if reason == controlTypes.REASON_FOCUS:
+		cancelable = commands.CancelableSpeechCommand()
+
+		def checkIfValid():
+			log.debug("checked if valid, speakObjectProperties")
+			try:
+				#  sometimes obj is a Gecko_ia2(VirtualBuffer)
+				return obj.isGainFocusValid()
+			except Exception:
+				log.error("checkIfValidFailed",  exc_info=True)
+			return True
+		cancelable._checkIfValid = checkIfValid
+		speechSequence.append(cancelable)
+
 	if speechSequence:
 		if _prefixSpeechCommand is not None:
 			speechSequence.insert(0, _prefixSpeechCommand)
@@ -1167,6 +1182,19 @@ def speakTextInfo(  # noqa: C901
 	if not suppressBlanks and reason != controlTypes.REASON_SAYALL and shouldConsiderTextInfoBlank:
 		# Translators: This is spoken when the line is considered blank.
 		speechSequence.append(_("blank"))
+	#
+	# if reason == controlTypes.REASON_FOCUS:
+	# 	cancelable = commands.CancelableSpeechCommand()
+	# 	obj = info.o
+	# 	def checkIfValid():
+	# 		try:
+	# 			#  sometimes obj is a Gecko_ia2(VirtualBuffer)
+	# 			return obj.isGainFocusValid()
+	# 		except Exception:
+	# 			log.error("checkIfValidFailed",  exc_info=True)
+	# 		return True
+	# 	cancelable._checkIfValid = checkIfValid
+	# 	speechSequence.append(cancelable)
 
 	#Cache a copy of the new controlFieldStack for future use
 	if useCache:

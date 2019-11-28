@@ -134,6 +134,8 @@ class _EventExecuter(object):
 		if func:
 			yield func, ()
 
+lastGainFocus = None
+
 def executeEvent(eventName,obj,**kwargs):
 	"""Executes an NVDA event.
 	@param eventName: the name of the event type (e.g. 'gainFocus', 'nameChange')
@@ -143,11 +145,17 @@ def executeEvent(eventName,obj,**kwargs):
 	@param kwargs: Additional event parameters as keyword arguments.
 	"""
 	try:
+		isGainFocus = eventName == "gainFocus"
 		# Allow NVDAObjects to redirect focus events to another object of their choosing.
-		if eventName=="gainFocus" and obj.focusRedirect:
+		if isGainFocus and obj.focusRedirect:
 			obj=obj.focusRedirect
 		sleepMode=obj.sleepMode
-		if eventName=="gainFocus" and not doPreGainFocus(obj,sleepMode=sleepMode):
+		if isGainFocus and not obj.isGainFocusValid():
+			log.debug("Skipped speaking object that is no longer focused")
+			return
+		else:
+			speech._manager.removeCancelledSpeechCommands()
+		if isGainFocus and not doPreGainFocus(obj,sleepMode=sleepMode):
 			return
 		elif not sleepMode and eventName=="documentLoadComplete" and not doPreDocumentLoadComplete(obj):
 			return
